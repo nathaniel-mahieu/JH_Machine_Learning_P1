@@ -1,7 +1,7 @@
 #Machine Learning Project 1: Predicting Excercize
 
 
-
+This file is the entirety of the project.  I saved the generated models and included them in the repository (The code to generate the models is commented out below).  A clone of this repository should be executable.
 
 ```r
 library(caret)
