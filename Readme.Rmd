@@ -1,0 +1,100 @@
+#Machine Learning Project 1: Predicting Excercize
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE, error=FALSE, fig.width = 10, fig.align='center')
+```
+
+```{r, results='hide'}
+library(caret)
+library(plyr)
+library(doParallel)
+
+cl <- makeCluster(detectCores()-1)
+registerDoParallel(cl)
+
+set.seed(987987)
+```
+
+## Data Import
+Here we create two sets of data.  The training data will be used to develop the model and the testing data will be used to estimate the real-world error rate.
+
+The columns of raw data are converted to numeric or factor as appropriate.  Columns 1:6 are names and times which should not be included as predictors and therefore are removed.
+```{r}
+rawdata = read.csv("pml-training.csv", stringsAsFactors=F)
+
+rawdata[,160] = factor(rawdata[,160])
+trainingdata = rawdata[,-(1:6)]
+for (x in 1:(ncol(trainingdata)-1)) {
+  trainingdata[,x] = as.numeric(trainingdata[,x])
+}
+
+zv = nearZeroVar(trainingdata, saveMetrics = T)
+trainingdata = trainingdata[,!zv[,4]]
+
+
+intrain = createDataPartition(y=trainingdata$classe, p=0.75, list=F)
+training = trainingdata[intrain,]
+testing = trainingdata[-intrain,]
+```
+
+## Training Data Model Building
+Before fitting the model we impute and center and scale the data. We then train a Random Forests model as rfFit.
+
+Our model is used to predict the known classes of the training data resulting in the in-sample error below. (~ 0.000)3al
+```{r}
+preProc = preProcess(training[,-ncol(training)], method=c("knnImpute", "center", "scale"))
+training_proc = predict(preProc, training[,-ncol(training)])
+
+#rfFit = train(training$classe ~ ., data=training_proc, method="rf", allowParallel=T)
+#save("rfFit", file="rfFit.Rdata")
+load("rfFit.Rdata")
+print(rfFit)
+
+modeloutput_train = predict(rfFit, training_proc)
+confusionMatrix(modeloutput_train, training$classe)
+```
+
+## Testing Data Model Evaluation
+We then use the model rfFit to predict the testing classes.  This results in the out-of-sample error below. (~ 0.0012)
+```{r}
+testing_proc = predict(preProc, testing[,-ncol(testing)])
+                    
+modeloutput_test = predict(rfFit, newdata = testing_proc)
+confusionMatrix(modeloutput_test, testing$classe)
+```
+
+## Model comparisons
+For fun we compare three different algorithms, Random Forests,  Partial Least Squares and weighted K Nearest Neighbors
+```{r}
+#
+#plsFit = train(training$classe ~ ., data=training_proc, method="pls", allowParallel=T)
+#save("plsFit", file="plsFit.Rdata")
+load("plsFit.Rdata")
+
+#kknnFit = train(training$classe ~ ., data=training_proc, method="kknn", allowParallel=T)
+#save("kknnFit", file="kknnFit.Rdata")
+load("kknnFit.Rdata")
+
+resamps = resamples(list(rfFit = rfFit, plsFit = plsFit, kknnFit=kknnFit))
+summary(resamps)
+```
+
+
+##Predicting on Validation Set
+The predictions are made here on the 20 samples for which the classe is unknown.
+
+```{r}
+verify = read.csv("pml-testing.csv", stringsAsFactors=F)
+verify[,160] = factor(verify[,160])
+verifydata = verify[,-c(1:6)]
+verifydata = verifydata[,!zv[,4]]
+
+for (x in 1:(ncol(verifydata)-1)) {
+  verifydata[,x] = as.numeric(verifydata[,x])
+}
+
+
+verify_proc = predict(preProc, verifydata[,-ncol(verifydata)])
+modeloutput_verify = predict(rfFit, newdata = verify_proc)
+modeloutput_verify
+```
